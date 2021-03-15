@@ -77,8 +77,6 @@ def _github_release_archive_impl(ctx):
 
     workspace_and_buildfile(ctx)
     patch(ctx)
-    cmd = ["find", ctx.path(".")]
-    ctx.execute(cmd, quiet = False)
 
     return update_attrs(ctx.attr, _github_release_archive_attrs.keys(), {})
 
