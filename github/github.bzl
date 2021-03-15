@@ -13,7 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
+"""This rule was largely based on the core Bazel rule for
+http_archives
+https://github.com/bazelbuild/bazel/blob/6ec54ee8b8c0e712f4d0b56678471cabaa17b2c3/tools/build_defs/repo/http.bzl
 """
 
 load(
