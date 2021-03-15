@@ -4,57 +4,9 @@
 load(
     "@bazel_tools//tools/build_defs/repo:utils.bzl",
     "patch",
-    "read_netrc",
     "update_attrs",
-    "use_netrc",
     "workspace_and_buildfile",
 )
-
-_AUTH_PATTERN_DOC = """An optional dict mapping host names to custom authorization patterns.
-If a URL's host name is present in this dict the value will be used as a pattern when
-generating the authorization header for the http request. This enables the use of custom
-authorization schemes used in a lot of common cloud storage providers.
-The pattern currently supports 2 tokens: <code>&lt;login&gt;</code> and
-<code>&lt;password&gt;</code>, which are replaced with their equivalent value
-in the netrc file for the same host name. After formatting, the result is set
-as the value for the <code>Authorization</code> field of the HTTP request.
-Example attribute and netrc for a http download to an oauth2 enabled API using a bearer token:
-<pre>
-auth_patterns = {
-    "storage.cloudprovider.com": "Bearer &lt;password&gt;"
-}
-</pre>
-netrc:
-<pre>
-machine storage.cloudprovider.com
-        password RANDOM-TOKEN
-</pre>
-The final HTTP request would have the following header:
-<pre>
-Authorization: Bearer RANDOM-TOKEN
-</pre>
-"""
-
-def _get_auth(ctx, urls):
-    """Given the list of URLs obtain the correct auth dict."""
-    if ctx.attr.netrc:
-        netrc = read_netrc(ctx, ctx.attr.netrc)
-        return use_netrc(netrc, urls, ctx.attr.auth_patterns)
-
-    if "HOME" in ctx.os.environ and not ctx.os.name.startswith("windows"):
-        netrcfile = "%s/.netrc" % (ctx.os.environ["HOME"])
-        if ctx.execute(["test", "-f", netrcfile]).return_code == 0:
-            netrc = read_netrc(ctx, netrcfile)
-            return use_netrc(netrc, urls, ctx.attr.auth_patterns)
-
-    if "USERPROFILE" in ctx.os.environ and ctx.os.name.startswith("windows"):
-        netrcfile = "%s/.netrc" % (ctx.os.environ["USERPROFILE"])
-        if ctx.path(netrcfile).exists:
-            netrc = read_netrc(ctx, netrcfile)
-            return use_netrc(netrc, urls, ctx.attr.auth_patterns)
-
-    return {}
-
 
 def _github_release_archive_impl(ctx):
     """Implementation of the http_archive rule."""
@@ -64,15 +16,25 @@ def _github_release_archive_impl(ctx):
     release_url = "https://api.github.com/repos/%s/%s/releases/tags/%s" % (ctx.attr.owner, ctx.attr.repo, ctx.attr.tag)
     release_json_path = ctx.path("_release.json")
 
-    cmd = ["curl", "--silent", "-n", "-L",
-           "--output", release_json_path, release_url]
-    ctx.execute(cmd, quiet=False)
+    cmd = [
+        "curl",
+        "--silent",
+        "-n",
+        "-L",
+        "--output",
+        release_json_path,
+        release_url,
+    ]
+    ctx.execute(cmd, quiet = False)
 
     release = json.decode(ctx.read(release_json_path))
     ctx.delete(release_json_path)
 
-    assets = [asset for asset in release['assets']
-             if asset["name"] == ctx.attr.asset_name]
+    assets = [
+        asset
+        for asset in release["assets"]
+        if asset["name"] == ctx.attr.asset_name
+    ]
 
     if len(assets) < 1:
         fail("Couldn't find an asset matching %s" % ctx.attr.asset_name)
@@ -81,20 +43,27 @@ def _github_release_archive_impl(ctx):
 
     # Download and extract
     download_path = ctx.path(asset["name"])
-    cmd = ["curl", "--silent", "-n", "-L",
-           "--header", 'Accept: application/octet-stream',
-           "--output", download_path, asset["url"]]
-    ctx.execute(cmd, quiet=False)
-    ctx.extract(download_path, stripPrefix=ctx.attr.strip_prefix)
+    cmd = [
+        "curl",
+        "--silent",
+        "-n",
+        "-L",
+        "--header",
+        "Accept: application/octet-stream",
+        "--output",
+        download_path,
+        asset["url"],
+    ]
+    ctx.execute(cmd, quiet = False)
+    ctx.extract(download_path, stripPrefix = ctx.attr.strip_prefix)
     ctx.delete(download_path)
 
     workspace_and_buildfile(ctx)
     patch(ctx)
-    cmd = ["find", ctx.path('.')]
-    ctx.execute(cmd, quiet=False)
+    cmd = ["find", ctx.path(".")]
+    ctx.execute(cmd, quiet = False)
 
     return update_attrs(ctx.attr, _github_release_archive_attrs.keys(), {})
-
 
 _github_release_archive_attrs = {
     "owner": attr.string(
@@ -103,15 +72,15 @@ _github_release_archive_attrs = {
     ),
     "repo": attr.string(
         doc =
-        """""",
+            """""",
     ),
     "tag": attr.string(
         doc =
-        """""",
+            """""",
     ),
     "asset_name": attr.string(
         doc =
-        """""",
+            """""",
     ),
     "sha256": attr.string(
         doc = """The expected SHA-256 of the file downloaded.
@@ -122,15 +91,6 @@ easier but should be set before shipping.""",
     ),
     "netrc": attr.string(
         doc = "Location of the .netrc file to use for authentication",
-    ),
-    "auth_patterns": attr.string_dict(
-        doc = _AUTH_PATTERN_DOC,
-    ),
-    "canonical_id": attr.string(
-        doc = """A canonical id of the archive downloaded.
-If specified and non-empty, bazel will not take the archive from cache,
-unless it was added to the cache by a request with the same canonical id.
-""",
     ),
     "strip_prefix": attr.string(
         doc = """A directory prefix to strip from the extracted files.
